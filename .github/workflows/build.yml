@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,15 +20,32 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
         
+    - name: Install Android SDK
+      run: |
+        export ANDROID_HOME=$HOME/android-sdk
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        cd $ANDROID_HOME/cmdline-tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip -q commandlinetools-linux-11076708_latest.zip
+        mv cmdline-tools latest
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+        yes | sdkmanager --licenses || true
+        sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        
     - name: Install Gradle
       run: |
-        wget https://services.gradle.org/distributions/gradle-8.2-bin.zip
+        wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
         unzip -q gradle-8.2-bin.zip
         sudo mv gradle-8.2 /opt/gradle
         echo "/opt/gradle/bin" >> $GITHUB_PATH
         
     - name: Build APK
-      run: gradle assembleDebug
+      run: |
+        export ANDROID_HOME=$HOME/android-sdk
+        gradle assembleDebug
       
     - name: Upload APK
       uses: actions/upload-artifact@v4
