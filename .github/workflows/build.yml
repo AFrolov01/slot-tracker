@@ -7,61 +7,47 @@ on:
 
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: DIAGNOSTIC - Check files
       run: |
         echo "=== Current directory ==="
         pwd
         ls -la
-        echo "=== Find all gradle files ==="
-        find . -name "*.gradle" -o -name "*.gradle.kts" -o -name "gradlew" -o -name "settings.gradle"
-        echo "=== Check settings.gradle ==="
-        cat settings.gradle 2>/dev/null || echo "NO settings.gradle"
-        echo "=== Check root build.gradle ==="
-        cat build.gradle 2>/dev/null || echo "NO build.gradle"
-        echo "=== Check app/build.gradle ==="
-        cat app/build.gradle 2>/dev/null || echo "NO app/build.gradle"
-
-    - name: Install Java 17 via apt
+        echo "=== gradle/wrapper contents ==="
+        ls -la gradle/wrapper/ 2>/dev/null || echo "NO gradle/wrapper"
+        echo "=== Check gradlew executable ==="
+        test -x gradlew && echo "gradlew is executable" || echo "gradlew NOT executable"
+        
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Download missing gradle-wrapper.jar
       run: |
-        sudo apt-get update
-        sudo apt-get install -y openjdk-17-jdk
-        java -version
-
-    - name: Download and install Android SDK
+        mkdir -p gradle/wrapper
+        wget -q https://raw.githubusercontent.com/gradle/gradle/v8.2.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
+        ls -la gradle/wrapper/
+        
+    - name: Make gradlew executable and build
       run: |
-        mkdir -p $HOME/android-sdk/cmdline-tools
-        cd $HOME/android-sdk/cmdline-tools
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-        unzip -q commandlinetools-linux-11076708_latest.zip
-        mv cmdline-tools latest
-        export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
-        yes | sdkmanager --licenses || true
-        sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
-        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-
-    - name: Download and install Gradle
-      run: |
-        wget -q https://services.gradle.org/distributions/gradle-8.2-bin.zip
-        unzip -q gradle-8.2-bin.zip
-        sudo mv gradle-8.2 /opt/gradle
-        echo "/opt/gradle/bin" >> $GITHUB_PATH
-
-    - name: Build APK
-      env:
-        ANDROID_HOME: ${{ env.ANDROID_HOME }}
-      run: |
-        gradle assembleDebug --no-daemon --stacktrace
-
+        chmod +x gradlew
+        ./gradlew assembleDebug --no-daemon --stacktrace
+      
     - name: Upload APK
       uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 5
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
